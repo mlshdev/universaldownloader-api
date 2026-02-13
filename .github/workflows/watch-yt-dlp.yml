@@ -1,0 +1,68 @@
+name: Watch yt-dlp Releases
+
+on:
+  schedule:
+    # Check every 6 hours
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Get latest yt-dlp release
+        id: ytdlp
+        run: |
+          LATEST=$(curl -s https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest | jq -r '.tag_name')
+          echo "version=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Latest yt-dlp release: $LATEST"
+
+      - name: Restore last known version from cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/ytdlp-version
+          key: ytdlp-last-version-${{ steps.ytdlp.outputs.version }}
+          restore-keys: ytdlp-last-version-
+
+      - name: Check if version changed
+        id: check
+        run: |
+          LATEST="${{ steps.ytdlp.outputs.version }}"
+          if [[ "${{ steps.cache.outputs.cache-hit }}" == "true" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Cache hit for $LATEST — no change"
+          elif [[ -n "$LATEST" && "$LATEST" != "null" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "New yt-dlp version detected: $LATEST"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Failed to fetch version"
+          fi
+
+      - name: Save new version to cache
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          mkdir -p /tmp
+          echo "${{ steps.ytdlp.outputs.version }}" > /tmp/ytdlp-version
+
+      - name: Persist version cache
+        if: steps.check.outputs.changed == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/ytdlp-version
+          key: ytdlp-last-version-${{ steps.ytdlp.outputs.version }}
+
+      - name: Trigger rebuild
+        if: steps.check.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/dispatches \
+            -X POST \
+            -f event_type=yt-dlp-release \
+            -f 'client_payload[yt_dlp_version]=${{ steps.ytdlp.outputs.version }}'
+          echo "Triggered rebuild for yt-dlp ${{ steps.ytdlp.outputs.version }}"

@@ -1,0 +1,37 @@
+services:
+  video-download-api:
+    image: ghcr.io/mlshdev/universaldownloader-api:latest
+    container_name: video-download-api
+    restart: unless-stopped
+    # SELinux: use :Z for automatic relabeling (no label=disable needed)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    environment:
+      # Auth tokens (comma-separated for multiple tokens)
+      - AUTH_TOKENS=${AUTH_TOKENS:-your-secret-token-here}
+      # API server configuration
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - API_WORKERS=1
+      - API_LOG_LEVEL=info
+      # yt-dlp configuration
+      - YTDLP_COOKIES_FILE=/data/cookies.txt
+      - YTDLP_TWITTER_API=${YTDLP_TWITTER_API:-graphql}
+      - YTDLP_TWITTER_API_ORDER=${YTDLP_TWITTER_API_ORDER:-graphql,legacy,syndication}
+      - YTDLP_USER_AGENT=${YTDLP_USER_AGENT:-}
+      # Optional: Custom format selection (default optimized for Apple QuickTime)
+      # - YTDLP_FORMAT=bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/best
+    volumes:
+      - ./data:/data:rw,Z
+    networks:
+      - web
+    labels:
+      - "traefik.enable=false"
+      - "io.containers.autoupdate=registry"
+
+networks:
+  web:
+    driver: bridge
