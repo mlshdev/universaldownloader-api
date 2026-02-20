@@ -3,14 +3,14 @@ name: Watch yt-dlp Releases
 on:
   schedule:
     # Check every 6 hours
-    - cron: "0 */6 * * *"
+    - cron: "0 0 * * 1"
   workflow_dispatch:
 
 jobs:
   check:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       actions: write
     steps:
       - name: Get latest yt-dlp release
