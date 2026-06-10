@@ -7,16 +7,20 @@ ARG TARGETARCH
 
 RUN apk add --no-cache curl tar xz
 
-RUN set -ex; \
+RUN set -eux; \
     case "${TARGETARCH}" in \
     amd64) FFMPEG_ARCH="linux64" ;; \
     arm64) FFMPEG_ARCH="linuxarm64" ;; \
-    *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
+    *) echo "Unsupported architecture: ${TARGETARCH}" >&2 && exit 1 ;; \
     esac; \
-    curl -L "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-${FFMPEG_ARCH}-gpl.tar.xz" -o /tmp/ffmpeg.tar.xz && \
-    mkdir -p /ffmpeg && \
-    tar -xJf /tmp/ffmpeg.tar.xz -C /ffmpeg --strip-components=1 && \
-    rm /tmp/ffmpeg.tar.xz
+    url="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-${FFMPEG_ARCH}-gpl.tar.xz"; \
+    curl --fail --location --show-error --silent \
+    --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 \
+    -o /tmp/ffmpeg.tar.xz "${url}"; \
+    mkdir -p /ffmpeg; \
+    tar -xJf /tmp/ffmpeg.tar.xz -C /ffmpeg --strip-components=1; \
+    rm /tmp/ffmpeg.tar.xz; \
+    test -s /ffmpeg/bin/ffmpeg && test -s /ffmpeg/bin/ffprobe
 
 FROM ghcr.io/astral-sh/uv:python3.14-trixie
 
