@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  schedule:
+    # Run every Monday at 00:00 UTC
+    - cron: "0 0 * * 1"
   repository_dispatch:
     types: [yt-dlp-release]
   workflow_dispatch:
@@ -53,17 +56,23 @@ jobs:
       - name: Extract version for build args
         id: build_version
         run: |
-          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
-            echo "version=ytdlp-${{ github.event.client_payload.yt_dlp_version || 'rebuild' }}" >> "$GITHUB_OUTPUT"
-          else
-            MSG=$(git log -1 --format=%s)
-            if [[ "$MSG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-              echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
-            else
-              echo "version=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-            fi
-          fi
-          echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+         if [[ "${{ github.event_name }}" == "schedule" ]]; then
+           echo "version=weekly-rebuild-$(date -u +%d%m%Y)" >> "$GITHUB_OUTPUT"
+           echo "is_scheduled=true" >> "$GITHUB_OUTPUT"
+         elif [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+           echo "version=ytdlp-${{ github.event.client_payload.yt_dlp_version || 'rebuild' }}" >> "$GITHUB_OUTPUT"
+           echo "is_scheduled=false" >> "$GITHUB_OUTPUT"
+         else
+           MSG=$(git log -1 --format=%s)
+           if [[ "$MSG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+             echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+             echo "is_scheduled=false" >> "$GITHUB_OUTPUT"
+           else
+             echo "version=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+             echo "is_scheduled=false" >> "$GITHUB_OUTPUT"
+           fi
+         fi
+         echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
       - name: Build and push by digest
         id: build
@@ -114,7 +123,11 @@ jobs:
       - name: Extract version from commit message
         id: version
         run: |
-          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+            echo "version=$(date -u +%d%m%Y)" >> "$GITHUB_OUTPUT"
+            echo "Scheduled weekly rebuild, tagging with date $(date -u +%d%m%Y) and latest"
+          elif [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
             echo "is_release=true" >> "$GITHUB_OUTPUT"
             echo "version=latest" >> "$GITHUB_OUTPUT"
             echo "Triggered by yt-dlp release, tagging as latest"
