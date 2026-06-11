@@ -1,7 +1,7 @@
-FROM docker.io/denoland/deno:bin AS deno-bin
+FROM docker.io/denoland/deno:bin@sha256:754be20b2f6342dc2ad21f2d620b586b632eeb2f5af1387100c042089be5118c AS deno-bin
 
 # FFmpeg downloader stage
-FROM docker.io/library/alpine:latest AS ffmpeg-downloader
+FROM docker.io/library/alpine:latest@sha256:a2d49ea686c2adfe3c992e47dc3b5e7fa6e6b5055609400dc2acaeb241c829f4 AS ffmpeg-downloader
 
 ARG TARGETARCH
 
@@ -22,7 +22,7 @@ RUN set -eux; \
     rm /tmp/ffmpeg.tar.xz; \
     test -s /ffmpeg/bin/ffmpeg && test -s /ffmpeg/bin/ffprobe
 
-FROM ghcr.io/astral-sh/uv:python3.14-trixie
+FROM ghcr.io/astral-sh/uv:python3.14-trixie@sha256:5abb44713561ed9cd4decf381d3b2034f87215126f4c347990e578c9e12df5ec
 
 # Build arguments for OCI annotations
 ARG BUILD_DATE

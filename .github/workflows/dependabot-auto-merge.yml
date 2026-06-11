@@ -1,0 +1,48 @@
+name: Dependabot Auto-Merge
+
+on:
+  pull_request_target:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Approve the pull request
+        continue-on-error: true
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr review --approve "$PR_URL"
+
+      - name: Squash-merge the pull request
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --squash --delete-branch "$PR_URL"
+
+      # A merge made with GITHUB_TOKEN does not trigger the push-based build,
+      # so dispatch the rebuild explicitly (repository_dispatch is exempt from
+      # the recursion guard). Only base-image updates need an out-of-band
+      # rebuild; github-actions bumps don't change the published image.
+      - name: Trigger image rebuild
+        if: steps.meta.outputs.package-ecosystem == 'docker'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPS: ${{ steps.meta.outputs.dependency-names }}
+        run: |
+          gh api "repos/${{ github.repository }}/dispatches" \
+            -X POST \
+            -f event_type=base-image-update \
+            -f "client_payload[dependencies]=${DEPS}"
+          echo "Dispatched rebuild for base-image update: ${DEPS}"
