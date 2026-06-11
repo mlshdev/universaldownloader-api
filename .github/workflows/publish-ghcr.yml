@@ -8,7 +8,7 @@ on:
     # Run every Monday at 00:00 UTC
     - cron: "0 0 * * 1"
   repository_dispatch:
-    types: [yt-dlp-release]
+    types: [yt-dlp-release, base-image-update]
   workflow_dispatch:
 
 env:
@@ -60,7 +60,11 @@ jobs:
            echo "version=weekly-rebuild-$(date -u +%d%m%Y)" >> "$GITHUB_OUTPUT"
            echo "is_scheduled=true" >> "$GITHUB_OUTPUT"
          elif [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
-           echo "version=ytdlp-${{ github.event.client_payload.yt_dlp_version || 'rebuild' }}" >> "$GITHUB_OUTPUT"
+           if [[ "${{ github.event.action }}" == "base-image-update" ]]; then
+             echo "version=base-image-rebuild-$(date -u +%d%m%Y)" >> "$GITHUB_OUTPUT"
+           else
+             echo "version=ytdlp-${{ github.event.client_payload.yt_dlp_version || 'rebuild' }}" >> "$GITHUB_OUTPUT"
+           fi
            echo "is_scheduled=false" >> "$GITHUB_OUTPUT"
          else
            MSG=$(git log -1 --format=%s)
