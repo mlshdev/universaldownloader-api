@@ -14,26 +14,51 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlparse
 
 import yt_dlp
-from fastapi import Depends, FastAPI, HTTPException, Security, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Security, status
 from fastapi.responses import FileResponse
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, HttpUrl
 from starlette.background import BackgroundTask
+from starlette.datastructures import Headers
 
-# Configure logging
+
+def _resolve_log_level() -> int:
+    """Resolve the log level from API_LOG_LEVEL (defaults to INFO)."""
+    raw = os.getenv("API_LOG_LEVEL", "info").strip().upper()
+    return getattr(logging, raw, logging.INFO)
+
+
+# Configure logging. Level is driven by API_LOG_LEVEL so operators can flip the
+# whole app (and our request tracing below) to DEBUG without touching code.
 logging.basicConfig(
-    level=logging.INFO,
+    level=_resolve_log_level(),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
     force=True,
 )
 logger = logging.getLogger(__name__)
+
+# Headers that may carry secrets; redacted before logging.
+_SENSITIVE_HEADERS = {"authorization", "cookie", "proxy-authorization", "x-api-key"}
+
+
+def _redact_headers(headers: Headers) -> dict[str, str]:
+    """Return a log-safe copy of request headers with secrets masked."""
+    safe: dict[str, str] = {}
+    for key, value in headers.items():
+        if key.lower() in _SENSITIVE_HEADERS:
+            safe[key] = f"<redacted len={len(value)}>" if value else "<empty>"
+        else:
+            safe[key] = value
+    return safe
 
 
 # ============================================================================
@@ -66,20 +91,36 @@ async def verify_token(
         return "anonymous"
 
     if not api_key:
+        logger.debug("Auth rejected: Authorization header absent")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing Authorization header",
         )
 
+    had_bearer = api_key.startswith("Bearer ")
     # Support "Bearer <token>" format
     token = api_key.removeprefix("Bearer ").strip()
+    logger.debug(
+        "Auth check: header present (len=%d, bearer_prefix=%s, token_len=%d), "
+        "%d configured token(s)",
+        len(api_key),
+        had_bearer,
+        len(token),
+        len(tokens),
+    )
 
     if token not in tokens:
+        logger.warning(
+            "Auth rejected: token not recognized (token_len=%d, bearer_prefix=%s)",
+            len(token),
+            had_bearer,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token",
         )
 
+    logger.debug("Auth accepted")
     return token
 
 
@@ -391,6 +432,28 @@ def download_video(url: str, output_dir: Path) -> Path:
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     logger.info("Video Download API starting up")
+    logger.info(
+        "Bind config: API_HOST=%s API_PORT=%s API_WORKERS=%s API_LOG_LEVEL=%s",
+        os.getenv("API_HOST", "0.0.0.0"),
+        os.getenv("API_PORT", "8000"),
+        os.getenv("API_WORKERS", "1"),
+        os.getenv("API_LOG_LEVEL", "info"),
+    )
+    logger.debug(
+        "yt-dlp config: cookies_file=%s twitter_api=%s twitter_api_order=%s "
+        "custom_user_agent=%s custom_format=%s",
+        os.getenv("YTDLP_COOKIES_FILE", "<none>"),
+        os.getenv("YTDLP_TWITTER_API", "<default>"),
+        os.getenv("YTDLP_TWITTER_API_ORDER", "<default>"),
+        "yes" if os.getenv("YTDLP_USER_AGENT") else "no",
+        "yes" if os.getenv("YTDLP_FORMAT") else "no",
+    )
+    logger.debug(
+        "Binary discovery: ffmpeg=%s ffprobe=%s deno=%s",
+        shutil.which("ffmpeg") or "/usr/local/bin/ffmpeg(?)",
+        shutil.which("ffprobe") or "/usr/local/bin/ffprobe(?)",
+        shutil.which("deno") or "<none>",
+    )
     tokens = get_auth_tokens()
     if tokens:
         logger.info(f"Loaded {len(tokens)} auth token(s)")
@@ -406,6 +469,66 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Trace every request: client, proxy headers, status, and latency.
+
+    At DEBUG this also dumps the full (redacted) header set, which is the
+    fastest way to diagnose reverse-proxy / auth connection problems.
+    """
+    request_id = uuid.uuid4().hex[:8]
+    client_host = request.client.host if request.client else "unknown"
+    # When behind Traefik/another proxy the real client is in X-Forwarded-For.
+    forwarded_for = request.headers.get("x-forwarded-for", "-")
+    forwarded_proto = request.headers.get("x-forwarded-proto", "-")
+    forwarded_host = request.headers.get("x-forwarded-host", "-")
+
+    logger.info(
+        "[%s] --> %s %s from client=%s xff=%s proto=%s host=%s ua=%r",
+        request_id,
+        request.method,
+        request.url.path,
+        client_host,
+        forwarded_for,
+        forwarded_proto,
+        forwarded_host,
+        request.headers.get("user-agent", "-"),
+    )
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            "[%s] request headers: %s | query: %s",
+            request_id,
+            _redact_headers(request.headers),
+            dict(request.query_params) or "{}",
+        )
+
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.exception(
+            "[%s] !! unhandled error after %.1fms processing %s %s",
+            request_id,
+            elapsed_ms,
+            request.method,
+            request.url.path,
+        )
+        raise
+
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "[%s] <-- %s %s %d (%.1fms)",
+        request_id,
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed_ms,
+    )
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 
 @app.get("/health", response_model=HealthResponse, tags=["Health"])

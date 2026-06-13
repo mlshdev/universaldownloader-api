@@ -27,11 +27,11 @@ services:
     volumes:
       - ./data:/data:rw,Z
     networks:
-      - web
+      - proxy
     labels:
       - "traefik.enable=false"
       - "io.containers.autoupdate=registry"
 
 networks:
-  web:
-    driver: bridge
+  proxy:
+    external: true
