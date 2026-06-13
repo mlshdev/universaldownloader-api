@@ -3,6 +3,12 @@ services:
     image: ghcr.io/mlshdev/universaldownloader-api:latest
     container_name: video-download-api
     restart: unless-stopped
+    # Publish the API to the host. API_HOST=0.0.0.0 only binds *inside* the
+    # container; this mapping is what actually exposes it on IP:PORT.
+    # Use "8000:8000" for LAN/public access, or "127.0.0.1:8000:8000" to
+    # restrict to localhost (e.g. when fronted by a reverse proxy).
+    ports:
+      - "8000:8000"
     # SELinux: use :Z for automatic relabeling (no label=disable needed)
     logging:
       driver: "json-file"
