@@ -22,7 +22,7 @@ jobs:
 
       - name: Restore last known version from cache
         id: cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: /tmp/ytdlp-version
           key: ytdlp-last-version-${{ steps.ytdlp.outputs.version }}
@@ -51,7 +51,7 @@ jobs:
 
       - name: Persist version cache
         if: steps.check.outputs.changed == 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: /tmp/ytdlp-version
           key: ytdlp-last-version-${{ steps.ytdlp.outputs.version }}
