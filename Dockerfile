@@ -1,4 +1,4 @@
-FROM docker.io/denoland/deno:bin@sha256:978d3d9d73452234f830739773a0a1a7e3b60463da3dfbcd99375e86ac5481e5 AS deno-bin
+FROM docker.io/denoland/deno:bin@sha256:a479d91f958895f3b9804ab4dd074b596a497fe0d4af198bfd2f688e61297c39 AS deno-bin
 
 # FFmpeg downloader stage
 FROM docker.io/library/alpine:latest@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS ffmpeg-downloader
