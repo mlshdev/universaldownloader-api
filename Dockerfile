@@ -22,7 +22,7 @@ RUN set -eux; \
     rm /tmp/ffmpeg.tar.xz; \
     test -s /ffmpeg/bin/ffmpeg && test -s /ffmpeg/bin/ffprobe
 
-FROM ghcr.io/astral-sh/uv:python3.14-trixie@sha256:ac3d9fe21a46ce45caefc31d4208b167b4568d11e919c9485b02b4e3730dd2f3
+FROM ghcr.io/astral-sh/uv:python3.14-trixie@sha256:0d7d613acc4bdc9dae1fabd67d30b94887aeab61e215d4a286ce1304a5b90ecf
 
 # Build arguments for OCI annotations
 ARG BUILD_DATE
