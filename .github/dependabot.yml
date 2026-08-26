@@ -1,8 +1,8 @@
 version: 2
 updates:
-  # Watch the multi-stage Dockerfile base layers (deno, alpine, uv).
+  # Watch the multi-stage Dockerfile base layers (deno, static-ffmpeg, uv).
   # Each FROM is digest-pinned, so Dependabot opens a PR whenever the
-  # content behind a moving tag (:bin, :latest, :python3.14-trixie) changes.
+  # content behind a pinned tag (:bin, :9.0.1, :python3.14-trixie-slim) changes.
   - package-ecosystem: docker
     directory: "/"
     schedule:

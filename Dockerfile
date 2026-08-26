@@ -1,28 +1,9 @@
 FROM docker.io/denoland/deno:bin@sha256:0d1262facd139e815217c001945eb822c7a78584cf660142c34a6b53effec1aa AS deno-bin
 
-# FFmpeg downloader stage
-FROM docker.io/library/alpine:latest@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS ffmpeg-downloader
+# Statically linked ffmpeg/ffprobe (static-pie, zero runtime deps, multi-arch)
+FROM docker.io/mwader/static-ffmpeg:9.0.1@sha256:54e55b0cb8f672870fc38ceb2e6c411855cb3b39c505f5f3b2505ee01ed5f2b7 AS ffmpeg
 
-ARG TARGETARCH
-
-RUN apk add --no-cache curl tar xz
-
-RUN set -eux; \
-    case "${TARGETARCH}" in \
-    amd64) FFMPEG_ARCH="linux64" ;; \
-    arm64) FFMPEG_ARCH="linuxarm64" ;; \
-    *) echo "Unsupported architecture: ${TARGETARCH}" >&2 && exit 1 ;; \
-    esac; \
-    url="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-${FFMPEG_ARCH}-gpl.tar.xz"; \
-    curl --fail --location --show-error --silent \
-    --retry 8 --retry-all-errors --retry-delay 5 --connect-timeout 30 \
-    -o /tmp/ffmpeg.tar.xz "${url}"; \
-    mkdir -p /ffmpeg; \
-    tar -xJf /tmp/ffmpeg.tar.xz -C /ffmpeg --strip-components=1; \
-    rm /tmp/ffmpeg.tar.xz; \
-    test -s /ffmpeg/bin/ffmpeg && test -s /ffmpeg/bin/ffprobe
-
-FROM ghcr.io/astral-sh/uv:python3.14-trixie@sha256:4b491b0f815b336cfe629253cc7eaff1ec1547f6a094e2139265c65544007381
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim@sha256:d61b872404ed1a0774e2098b5af64c178b59c99be171db6631455262bb0750b4
 
 # Build arguments for OCI annotations
 ARG BUILD_DATE
@@ -36,7 +17,7 @@ LABEL org.opencontainers.image.title="Video Download API" \
     org.opencontainers.image.source="https://github.com/mlshdev/universaldownloader-api" \
     org.opencontainers.image.documentation="https://github.com/mlshdev/universaldownloader-api/blob/main/README.md" \
     org.opencontainers.image.url="https://github.com/mlshdev/universaldownloader-api" \
-    org.opencontainers.image.base.name="ghcr.io/astral-sh/uv:python3.14-trixie" \
+    org.opencontainers.image.base.name="ghcr.io/astral-sh/uv:python3.14-trixie-slim" \
     org.opencontainers.image.created="${BUILD_DATE}" \
     org.opencontainers.image.version="${BUILD_VERSION}"
 
@@ -52,8 +33,8 @@ ENV PYTHONUNBUFFERED=1 \
     HOME=/home/app
 
 COPY --from=deno-bin /deno /usr/local/bin/deno
-COPY --from=ffmpeg-downloader /ffmpeg/bin/ffmpeg /usr/local/bin/ffmpeg
-COPY --from=ffmpeg-downloader /ffmpeg/bin/ffprobe /usr/local/bin/ffprobe
+COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
+COPY --from=ffmpeg /ffprobe /usr/local/bin/ffprobe
 
 # Create non-root user first for Podman rootless + SELinux
 RUN useradd --create-home --uid 1000 --home-dir /home/app --shell /usr/sbin/nologin app && \
