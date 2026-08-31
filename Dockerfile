@@ -1,9 +1,9 @@
-FROM docker.io/denoland/deno:bin@sha256:0d1262facd139e815217c001945eb822c7a78584cf660142c34a6b53effec1aa AS deno-bin
+FROM docker.io/denoland/deno:bin@sha256:4cf0029b9aeeeed5efcbb71828737f0d7c8c8a20072df960e51a5679ef0d21ba AS deno-bin
 
 # Statically linked ffmpeg/ffprobe (static-pie, zero runtime deps, multi-arch)
 FROM docker.io/mwader/static-ffmpeg:9.0.1@sha256:54e55b0cb8f672870fc38ceb2e6c411855cb3b39c505f5f3b2505ee01ed5f2b7 AS ffmpeg
 
-FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim@sha256:d61b872404ed1a0774e2098b5af64c178b59c99be171db6631455262bb0750b4
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim@sha256:0e664b12a6be9cd16be1015ec5cc3feebdeb42078ab587389707afbdfab8b10f
 
 # Build arguments for OCI annotations
 ARG BUILD_DATE
