@@ -3,7 +3,7 @@ FROM docker.io/denoland/deno:bin@sha256:4cf0029b9aeeeed5efcbb71828737f0d7c8c8a20
 # Statically linked ffmpeg/ffprobe (static-pie, zero runtime deps, multi-arch)
 FROM docker.io/mwader/static-ffmpeg:9.0.1@sha256:54e55b0cb8f672870fc38ceb2e6c411855cb3b39c505f5f3b2505ee01ed5f2b7 AS ffmpeg
 
-FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim@sha256:d2525beeae88affd18389bf69292abf9b5cbbb3f5c5242b6da3d20e304959b37
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim@sha256:8e551b61f7204be677ec93e83d031bf113bb15d1d13071908601107b68a5ce95
 
 # Build arguments for OCI annotations
 ARG BUILD_DATE
